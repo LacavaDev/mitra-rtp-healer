@@ -1,0 +1,412 @@
+###############################################
+# Global settings
+
+# Settings in this section are applied anywhere.
+
+###############################################
+# Global settings -> General
+
+# Verbosity of the program; available values are "error", "warn", "info", "debug".
+logLevel: info
+# Destinations of log messages; available values are "stdout", "file" and "syslog".
+logDestinations: [stdout]
+# If "file" is in logDestinations, this is the file which will receive the logs.
+logFile: mediamtx.log
+# If "syslog" is in logDestinations, use prefix for logs.
+sysLogPrefix: mediamtx
+
+# Timeout of read operations.
+readTimeout: 10s
+# Timeout of write operations.
+writeTimeout: 10s
+# Size of the queue of outgoing packets.
+# A higher value allows to increase throughput, a lower value allows to save RAM.
+writeQueueSize: 512
+# Maximum size of outgoing UDP packets.
+# This can be decreased to avoid fragmentation on networks with a low UDP MTU.
+udpMaxPayloadSize: 1472
+
+# Command to run when a client connects to the server.
+# This is terminated with SIGINT when a client disconnects from the server.
+# The following environment variables are available:
+# * MTX_CONN_TYPE: connection type
+# * MTX_CONN_ID: connection ID
+# * RTSP_PORT: RTSP server port
+runOnConnect:
+# Restart the command if it exits.
+runOnConnectRestart: no
+# Command to run when a client disconnects from the server.
+# Environment variables are the same of runOnConnect.
+runOnDisconnect:
+
+###############################################
+# Global settings -> Authentication
+
+# Authentication method. Available values are:
+# * internal: users are stored in the configuration file
+# * http: an external HTTP URL is contacted to perform authentication
+# * jwt: an external identity server provides authentication through JWTs
+authMethod: internal
+
+# Internal authentication.
+# list of users.
+authInternalUsers:
+  # Default unprivileged user.
+  # Username. 'any' means any user, including anonymous ones.
+- user: any
+  # Password. Not used in case of 'any' user.
+  pass:
+  # IPs or networks allowed to use this user. An empty list means any IP.
+  ips: []
+  # List of permissions.
+  permissions:
+    # Available actions are: publish, read, playback, api, metrics, pprof.
+  - action: publish
+    # Paths can be set to further restrict access to a specific path.
+    # An empty path means any path.
+    # Regular expressions can be used by using a tilde as prefix.
+    path:
+  - action: read
+    path:
+  - action: playback
+    path:
+
+  # Default administrator.
+  # This allows to use API, metrics and PPROF without authentication,
+  # if the IP is localhost.
+- user: any
+  pass:
+  ips: ['127.0.0.1', '::1']
+  permissions:
+  - action: api
+  - action: metrics
+  - action: pprof
+
+# HTTP-based authentication.
+# URL called to perform authentication. Every time a user wants
+# to authenticate, the server calls this URL with the POST method
+# and a body containing:
+# {
+#   "user": "user",
+#   "password": "password",
+#   "token": "token",
+#   "ip": "ip",
+#   "action": "publish|read|playback|api|metrics|pprof",
+#   "path": "path",
+#   "protocol": "rtsp|rtmp|hls|webrtc|srt",
+#   "id": "id",
+#   "query": "query"
+# }
+# If the response code is 20x, authentication is accepted, otherwise
+# it is discarded.
+authHTTPAddress:
+# Actions to exclude from HTTP-based authentication.
+# Format is the same as the one of user permissions.
+authHTTPExclude:
+- action: api
+- action: metrics
+- action: pprof
+
+# JWT-based authentication.
+# Users have to login through an external identity server and obtain a JWT.
+# This JWT must contain the claim "mediamtx_permissions" with permissions,
+# for instance:
+# {
+#  "mediamtx_permissions": [
+#     {
+#       "action": "publish",
+#       "path": "somepath"
+#     }
+#   ]
+# }
+# Users are expected to pass the JWT in the Authorization header, password or query parameter.
+# This is the JWKS URL that will be used to pull (once) the public key that allows
+# to validate JWTs.
+authJWTJWKS:
+# If the JWKS URL has a self-signed or invalid certificate,
+# you can provide the fingerprint of the certificate in order to
+# validate it anyway. It can be obtained by running:
+# openssl s_client -connect jwt_jwks_domain:443 </dev/null 2>/dev/null | sed -n '/BEGIN/,/END/p' > server.crt
+# openssl x509 -in server.crt -noout -fingerprint -sha256 | cut -d "=" -f2 | tr -d ':'
+authJWTJWKSFingerprint:
+# name of the claim that contains permissions.
+authJWTClaimKey: mediamtx_permissions
+# Actions to exclude from JWT-based authentication.
+# Format is the same as the one of user permissions.
+authJWTExclude: []
+# allow passing the JWT through query parameters of HTTP requests (i.e. ?jwt=JWT).
+# This is a security risk.
+authJWTInHTTPQuery: true
+
+###############################################
+# Global settings -> Control API
+
+# Enable controlling the server through the Control API.
+api: yes
+# Address of the Control API listener.
+apiAddress: :9997
+# Enable TLS/HTTPS on the Control API server.
+apiEncryption: no
+# Path to the server key. This is needed only when encryption is yes.
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+apiServerKey: server.key
+# Path to the server certificate.
+apiServerCert: server.crt
+# Value of the Access-Control-Allow-Origin header provided in every HTTP response.
+apiAllowOrigin: '*'
+# List of IPs or CIDRs of proxies placed before the HTTP server.
+# If the server receives a request from one of these entries, IP in logs
+# will be taken from the X-Forwarded-For header.
+apiTrustedProxies: []
+
+###############################################
+# Global settings -> Metrics
+
+# Enable Prometheus-compatible metrics.
+metrics: no
+# Address of the metrics HTTP listener.
+metricsAddress: :9998
+# Enable TLS/HTTPS on the Metrics server.
+metricsEncryption: no
+# Path to the server key. This is needed only when encryption is yes.
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+metricsServerKey: server.key
+# Path to the server certificate.
+metricsServerCert: server.crt
+# Value of the Access-Control-Allow-Origin header provided in every HTTP response.
+metricsAllowOrigin: '*'
+# List of IPs or CIDRs of proxies placed before the HTTP server.
+# If the server receives a request from one of these entries, IP in logs
+# will be taken from the X-Forwarded-For header.
+metricsTrustedProxies: []
+
+###############################################
+# Global settings -> PPROF
+
+# Enable pprof-compatible endpoint to monitor performances.
+pprof: no
+# Address of the pprof listener.
+pprofAddress: :9999
+# Enable TLS/HTTPS on the pprof server.
+pprofEncryption: no
+# Path to the server key. This is needed only when encryption is yes.
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+pprofServerKey: server.key
+# Path to the server certificate.
+pprofServerCert: server.crt
+# Value of the Access-Control-Allow-Origin header provided in every HTTP response.
+pprofAllowOrigin: '*'
+# List of IPs or CIDRs of proxies placed before the HTTP server.
+# If the server receives a request from one of these entries, IP in logs
+# will be taken from the X-Forwarded-For header.
+pprofTrustedProxies: []
+
+###############################################
+# Global settings -> Playback server
+
+# Enable downloading recordings from the playback server.
+playback: no
+# Address of the playback server listener.
+playbackAddress: :9996
+# Enable TLS/HTTPS on the playback server.
+playbackEncryption: no
+# Path to the server key. This is needed only when encryption is yes.
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+playbackServerKey: server.key
+# Path to the server certificate.
+playbackServerCert: server.crt
+# Value of the Access-Control-Allow-Origin header provided in every HTTP response.
+playbackAllowOrigin: '*'
+# List of IPs or CIDRs of proxies placed before the HTTP server.
+# If the server receives a request from one of these entries, IP in logs
+# will be taken from the X-Forwarded-For header.
+playbackTrustedProxies: []
+
+###############################################
+# Global settings -> RTSP server
+
+# Enable publishing and reading streams with the RTSP protocol.
+rtsp: yes
+# List of enabled RTSP transport protocols.
+# UDP is the most performant, but doesn't work when there's a NAT/firewall between
+# server and clients, and doesn't support encryption.
+# UDP-multicast allows to save bandwidth when clients are all in the same LAN.
+# TCP is the most versatile, and does support encryption.
+# The handshake is always performed with TCP.
+rtspTransports: [udp, multicast, tcp]
+# Encrypt handshakes and TCP streams with TLS (RTSPS).
+# Available values are "no", "strict", "optional".
+rtspEncryption: "no"
+# Address of the TCP/RTSP listener. This is needed only when encryption is "no" or "optional".
+rtspAddress: :8554
+# Address of the TCP/TLS/RTSPS listener. This is needed only when encryption is "strict" or "optional".
+rtspsAddress: :8322
+# Address of the UDP/RTP listener. This is needed only when "udp" is in rtspTransports.
+rtpAddress: :8000
+# Address of the UDP/RTCP listener. This is needed only when "udp" is in rtspTransports.
+rtcpAddress: :8001
+# IP range of all UDP-multicast listeners. This is needed only when "multicast" is in rtspTransports.
+multicastIPRange: 224.1.0.0/16
+# Port of all UDP-multicast/RTP listeners. This is needed only when "multicast" is in rtspTransports.
+multicastRTPPort: 8002
+# Port of all UDP-multicast/RTCP listeners. This is needed only when "multicast" is in rtspTransports.
+multicastRTCPPort: 8003
+# Path to the server key. This is needed only when encryption is "strict" or "optional".
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+rtspServerKey: server.key
+# Path to the server certificate. This is needed only when encryption is "strict" or "optional".
+rtspServerCert: server.crt
+# Authentication methods. Available are "basic" and "digest".
+# "digest" doesn't provide any additional security and is available for compatibility only.
+rtspAuthMethods: [basic]
+
+###############################################
+# Global settings -> RTMP server
+
+# Enable publishing and reading streams with the RTMP protocol.
+rtmp: no
+# Address of the RTMP listener. This is needed only when encryption is "no" or "optional".
+rtmpAddress: :1935
+# Encrypt connections with TLS (RTMPS).
+# Available values are "no", "strict", "optional".
+rtmpEncryption: "no"
+# Address of the RTMPS listener. This is needed only when encryption is "strict" or "optional".
+rtmpsAddress: :1936
+# Path to the server key. This is needed only when encryption is "strict" or "optional".
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+rtmpServerKey: server.key
+# Path to the server certificate. This is needed only when encryption is "strict" or "optional".
+rtmpServerCert: server.crt
+
+###############################################
+# Global settings -> HLS server
+
+# Enable reading streams with the HLS protocol.
+hls: no
+# Address of the HLS listener.
+hlsAddress: :8888
+# Enable TLS/HTTPS on the HLS server.
+# This is required for Low-Latency HLS.
+hlsEncryption: no 
+hlsServerKey: server.key 
+hlsServerCert: server.crt 
+hlsAllowOrigin: '*' 
+hlsTrustedProxies: [] 
+hlsAlwaysRemux: no 
+hlsVariant: lowLatency 
+hlsSegmentCount: 7 
+hlsSegmentDuration: 1s 
+hlsSegmentMaxSize: 50M 
+hlsDirectory: '' 
+hlsMuxerCloseAfter: 60s 
+webrtc: no 
+webrtcAddress: :8889 
+webrtcEncryption: no 
+webrtcServerKey: server.key 
+webrtcServerCert: server.crt 
+webrtcAllowOrigin: '*' 
+webrtcTrustedProxies: [] 
+webrtcLocalUDPAddress: :8189 
+webrtcLocalTCPAddress: '' 
+webrtcIPsFromInterfaces: yes 
+webrtcIPsFromInterfacesList: [] 
+webrtcAdditionalHosts: [] 
+webrtcICEServers2: [] 
+webrtcHandshakeTimeout: 10s 
+webrtcTrackGatherTimeout: 2s 
+webrtcSTUNGatherTimeout: 5s 
+srt: no 
+srtAddress: :8890 
+pathDefaults:  
+  source: publisher 
+  sourceFingerprint: 
+  sourceOnDemand: no 
+  sourceOnDemandStartTimeout: 10s 
+  sourceOnDemandCloseAfter: 10s 
+  maxReaders: 0 
+  srtReadPassphrase: 
+  fallback: 
+  useAbsoluteTimestamp: false 
+  record: yes 
+  recordPath: /data/shared/recordings/%path/%Y-%m-%d_%H-%M-%S-%f 
+  recordFormat: fmp4 
+  recordPartDuration: 1s 
+  recordSegmentDuration: 180s 
+  recordDeleteAfter: 0s 
+  overridePublisher: yes 
+  srtPublishPassphrase: 
+  rtspTransport: automatic 
+  rtspAnyPort: no 
+  rtspRangeType: 
+  rtspRangeStart: 
+  sourceRedirect: 
+  rpiCameraCamID: 0 
+  rpiCameraSecondary: false 
+  rpiCameraWidth: 1920 
+  rpiCameraHeight: 1080 
+  rpiCameraHFlip: false 
+  rpiCameraVFlip: false 
+  rpiCameraBrightness: 0 
+  rpiCameraContrast: 1 
+  rpiCameraSaturation: 1 
+  rpiCameraSharpness: 1 
+  rpiCameraExposure: normal 
+  rpiCameraAWB: auto 
+  rpiCameraAWBGains: [0, 0] 
+  rpiCameraDenoise: "off" 
+  rpiCameraShutter: 0 
+  rpiCameraMetering: centre 
+  rpiCameraGain: 0 
+  rpiCameraEV: 0 
+  rpiCameraROI: 
+  rpiCameraHDR: false 
+  rpiCameraTuningFile: 
+  rpiCameraMode: 
+  rpiCameraFPS: 30 
+  rpiCameraAfMode: continuous 
+  rpiCameraAfRange: normal 
+  rpiCameraAfSpeed: normal 
+  rpiCameraLensPosition: 0.0 
+  rpiCameraAfWindow: 
+  rpiCameraFlickerPeriod: 0 
+  rpiCameraTextOverlayEnable: false 
+  rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - MediaMTX' 
+  rpiCameraCodec: auto 
+  rpiCameraIDRPeriod: 60 
+  rpiCameraBitrate: 5000000 
+  rpiCameraProfile: main 
+  rpiCameraLevel: '4.1' 
+  rpiCameraJPEGQuality: 60 
+  runOnInit: 
+  runOnInitRestart: no 
+  runOnDemand: 
+  runOnDemandRestart: no 
+  runOnDemandStartTimeout: 10s 
+  runOnDemandCloseAfter: 10s 
+  runOnUnDemand: 
+  runOnReady: 
+  runOnReadyRestart: no 
+  runOnNotReady: curl http://0.0.0.0:1880/api/mediamtx-notready-hook?path=$MTX_PATH&source_type=$MTX_SOURCE_TYPE&source_id=$MTX_SOURCE_ID 
+  runOnRead: 
+  runOnReadRestart: no 
+  runOnUnread: 
+  runOnRecordSegmentCreate: 
+  runOnRecordSegmentComplete:
+ 
+ 
+paths: 
+  sample:
+    runOnInit: ffmpeg -stream_loop -1 -re -i "sample.mp4" -an -c:v libx264 -g 2 -keyint_min 2 -sc_threshold 0 -preset ultrafast -pkt_size 1450 -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+  all_others:
