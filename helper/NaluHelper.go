@@ -183,3 +183,14 @@ func PrintRTPHeader(pkt *rtp.Packet) {
 
 	fmt.Println("====================================")
 }
+
+// DecoderReset clears RTP header fields that might confuse the decoder,
+// specifically the Marker and Padding bits.
+//
+// !!! Use this function only when using the FU-A or Single NALU approaches !!!
+// from the Mitra RTP Healer library, as these techniques require certain
+// bits to be reset for compatibility with video decoders.
+func DecoderReset(pkt *rtp.Packet) {
+	pkt.Header.Marker = false
+	pkt.Header.Padding = false
+}
